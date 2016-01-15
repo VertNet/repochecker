@@ -1,0 +1,12 @@
+# Compiled
+*.pyc
+
+# Keys
+*.key
+
+# IDE
+.idea
+*.sublime*
+
+ # Tasks
+TODO.txt
