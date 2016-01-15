@@ -11,7 +11,10 @@ __author__ = '@jotegui'
 URLFETCH_DEADLINE = 60
 MODULE_NAME = "tools-repochecker"
 ADMINS = [
-    "javier.otegui@gmail.com"
+    "javier.otegui@gmail.com",
+    "dbloom@vertnet.org",
+    "larussell@vertnet.org",
+    "tuco@berkeley.edu"
 ]
 
 ghb_url = 'https://api.github.com'
