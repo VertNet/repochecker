@@ -1,6 +1,6 @@
-application: vertnet-portal
-module: tools-repochecker
-version: 1
+# application: vertnet-portal  # Obsolete, "application" is now taken from gcloud config
+service: tools-repochecker
+# version: 1  # Obsolete, use this flag instead when calling gcloud preview app deploy: --version 1
 runtime: python27
 threadsafe: true
 api_version: 1

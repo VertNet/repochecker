@@ -10,30 +10,39 @@ __author__ = '@jotegui'
 
 URLFETCH_DEADLINE = 60
 MODULE_NAME = "tools-repochecker"
-ADMINS = [
-    "javier.otegui@gmail.com",
-    "dbloom@vertnet.org",
-    "larussell@vertnet.org",
-    "tuco@berkeley.edu"
-]
+MODULE_URL = modules.get_hostname(module=MODULE_NAME)
 
-ghb_url = 'https://api.github.com'
+IS_DEV = os.environ.get('SERVER_SOFTWARE', '').startswith('Development')
+
+SENDER = "Resource Name Checker <repochecker@vertnet-portal.appspotmail.com>"
+
+if IS_DEV:
+    ADMINS = ["javier.otegui@gmail.com"]
+else:
+    ADMINS = [
+        "javier.otegui@gmail.com",
+        "dbloom@vertnet.org",
+        "larussell@vertnet.org",
+        "tuco@berkeley.edu"
+    ]
+
+ghb_url = "https://api.github.com"
 cdb_url = "https://vertnet.cartodb.com/api/v2/sql"
 
 
 def apikey(serv):
     """Return credentials file as a JSON object."""
-    path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '{0}.key'.format(serv))
+    path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                        '{0}.key'.format(serv))
     key = open(path, "r").read().rstrip()
     # logging.info("KEY %s" % key)
     return key
 
 
 def get_all_repos():
-    """Extract a list of all github_orgnames and github_reponames from CartoDB."""
-    query = "select github_orgname, github_reponame\
-             from resource_staging\
-             where ipt is true and networks like '%VertNet%';"
+    """Extract list of github_orgnames and github_reponames from CartoDB."""
+    query = "select github_orgname, github_reponame from resource_staging"
+    query += " where ipt is true and networks like '%VertNet%';"
     vals = {
         'api_key': apikey('cdb'),
         'q': query
@@ -61,8 +70,8 @@ def check_failed_repos():
     repos = {}
     headers = {
         'User-Agent': 'VertNet',  # Authenticate as VertNet
-        'Accept': 'application/vnd.github.v3+json',  # Require version 3 of the API (for stability)
-        'Authorization': 'token {0}'.format(apikey('gh'))  # Provide the API key
+        'Accept': 'application/vnd.github.v3+json',
+        'Authorization': 'token {0}'.format(apikey('gh'))
     }
 
     for repo in all_repos:
@@ -80,12 +89,17 @@ def check_failed_repos():
 
         repos[repo] = rpc
 
-    for repo in repos:
+    for repo in sorted(repos):
         rpc = repos[repo]
         result = rpc.get_result()
         content = json.loads(result.content)
         logging.info("Got {0} repos for {1}".format(len(content), repo[0]))
-        repo_list = [x['name'] for x in content]
+        # When org is missing, API returns dict, not list
+        try:
+            repo_list = [x['name'] for x in content]
+        except TypeError:
+            failed_repos.append(repo)
+        # When org exists but repo doesn't
         if repo_list is None or repo[1] not in repo_list:
             failed_repos.append(repo)
 
@@ -96,9 +110,9 @@ class RepoChecker(webapp2.RequestHandler):
     def get(self):
         self.response.headers['Content-Type'] = 'application/json'
 
-        logging.info("Checking consistency of repository names between CartoDB and GitHub.")
+        logging.info("Checking consistency of repository names.")
         failed_repos = check_failed_repos()
-        
+
         res = {
             'result': None
         }
@@ -110,21 +124,25 @@ class RepoChecker(webapp2.RequestHandler):
 
             error_message = "\n".join([", ".join(x) for x in failed_repos])
             mail.send_mail(
-                sender = "Resource Name Checker <repochecker@vertnet-portal.appspotmail.com>",
-                to = ADMINS,
-                subject = "Resource name checker failed",
-                body = """
+                sender=SENDER,
+                to=ADMINS,
+                subject="Resource name checker failed",
+                body="""
 Hey there,
 
-This is an automatic message sent by the Resource name checker tool to inform you that the script found {0} name inconsistencies in some repositories between CartoDB's resource_staging table and the name of organization and/or repository on GitHub. These are the specific repositories that failed (names as in CartoDB):
+This is an automatic message sent by the Resource name checker tool to inform
+you that the script found {0} name inconsistencies in some repositories between
+CartoDB's resource_staging table and the name of organization and/or repository
+on GitHub. These are the specific repositories that failed (names as in
+CartoDB):
 
 {1}
 
 Please, fix them and then go to {2} to restart the process.
 
 Thank you!
-""".format(len(failed_repos), error_message, "http://%s/" % modules.get_hostname(module=MODULE_NAME)))
-        
+""".format(len(failed_repos), error_message, "http://%s/" % MODULE_URL))
+
         else:
             res['result'] = "success"
             logging.info("The consistency check could not find any issue.")
