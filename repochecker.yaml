@@ -12,3 +12,9 @@ libraries:
 handlers:
 - url: /.*
   script: repochecker.app
+
+skip_files:
+- google-cloud-sdk/
+- webapp2-3.0.0b1/
+- repochecker-localtest.py
+- README.md

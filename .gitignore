@@ -8,5 +8,8 @@
 .idea
 *.sublime*
 
- # Tasks
+# Tasks
 TODO.txt
+
+# Mac
+.DS_Store

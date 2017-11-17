@@ -1,3 +1,26 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# The line above is to signify that the script contains utf-8 encoded characters.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Adapted from https://github.com/VertNet/bigquery
+
+__author__ = "Javier Otegui"
+__contributors__ = "Javier Otegui, John Wieczorek"
+__copyright__ = "Copyright 2017 vertnet.org"
+__version__ = "repochecker.py 2017-11-16T21:11-03:00"
+
 import os
 import json
 import urllib
@@ -5,8 +28,6 @@ import logging
 
 from google.appengine.api import urlfetch, mail, modules
 import webapp2
-
-__author__ = '@jotegui'
 
 URLFETCH_DEADLINE = 60
 MODULE_NAME = "tools-repochecker"
@@ -17,30 +38,25 @@ IS_DEV = os.environ.get('SERVER_SOFTWARE', '').startswith('Development')
 SENDER = "Resource Name Checker <repochecker@vertnet-portal.appspotmail.com>"
 
 if IS_DEV:
-    ADMINS = ["javier.otegui@gmail.com"]
+    ADMINS = ["tuco@berkeley.edu"]
 else:
     ADMINS = [
-        "javier.otegui@gmail.com",
         "dbloom@vertnet.org",
-        "larussell@vertnet.org",
         "tuco@berkeley.edu"
     ]
 
 ghb_url = "https://api.github.com"
 cdb_url = "https://vertnet.cartodb.com/api/v2/sql"
 
-
 def apikey(serv):
     """Return credentials file as a JSON object."""
     path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                         '{0}.key'.format(serv))
     key = open(path, "r").read().rstrip()
-    # logging.info("KEY %s" % key)
     return key
 
-
 def get_all_repos():
-    """Extract list of github_orgnames and github_reponames from CartoDB."""
+    """Extract list of github_orgnames and github_reponames from Carto."""
     query = "select github_orgname, github_reponame from resource_staging"
     query += " where ipt is true and networks like '%VertNet%';"
     vals = {
@@ -48,13 +64,11 @@ def get_all_repos():
         'q': query
     }
     data = urllib.urlencode(vals)
-
     urlfetch.set_default_fetch_deadline(URLFETCH_DEADLINE)
-
     result = urlfetch.fetch(url=cdb_url, payload=data, method=urlfetch.POST)
 
     all_repos = json.loads(result.content)['rows']
-    logging.info("Got {0} repos currently in CartoDB".format(len(all_repos)))
+    logging.info("Got {0} repos currently in Carto".format(len(all_repos)))
 
     result = []
     for repo in all_repos:
@@ -62,9 +76,8 @@ def get_all_repos():
 
     return result
 
-
 def check_failed_repos():
-    """Check repository name consistency between CartoDB and GitHub."""
+    """Check repository name consistency between Carto and GitHub."""
     failed_repos = []
     all_repos = get_all_repos()
     repos = {}
@@ -83,28 +96,55 @@ def check_failed_repos():
             continue
 
         rpc = urlfetch.create_rpc()
-        url = '/'.join([ghb_url, 'orgs', orgname, 'repos'])
+        url = '/'.join([ghb_url, 'repos', orgname, reponame])
+#        print 'url: %s' % url
         urlfetch.set_default_fetch_deadline(URLFETCH_DEADLINE)
         urlfetch.make_fetch_call(rpc, url, headers=headers)
-
         repos[repo] = rpc
-
-    for repo in sorted(repos):
-        rpc = repos[repo]
         result = rpc.get_result()
         content = json.loads(result.content)
-        logging.info("Got {0} repos for {1}".format(len(content), repo[0]))
-        # When org is missing, API returns dict, not list
         try:
-            repo_list = [x['name'] for x in content]
-        except TypeError:
-            failed_repos.append(repo)
-        # When org exists but repo doesn't
-        if repo_list is None or repo[1] not in repo_list:
-            failed_repos.append(repo)
+            name = content['name']
+        except KeyError, e:
+            logging.info('GitHub repository %s not found' % url)
+#            print 'KeyError: %s' % e 
+            failed_repos.append((orgname,reponame))
+
+#     orgname='pbdb-feedback'
+#     reponame='test'
+#     rpc = urlfetch.create_rpc()
+#     url = '/'.join([ghb_url, 'repos', orgname, reponame])
+#     print 'url: %s' % url
+#     urlfetch.set_default_fetch_deadline(URLFETCH_DEADLINE)
+#     urlfetch.make_fetch_call(rpc, url, headers=headers)
+#     repos[repo] = rpc
+#     result = rpc.get_result()
+#     content = json.loads(result.content)
+#     try:
+#         name = content['name']
+#     except KeyError, e:
+#         print 'KeyError: %s' % e 
+#         print 'content: %s' % content
+#         failed_repos.append((orgname,reponame))
+# 
+#     orgname='test-feedback'
+#     reponame='test'
+#     rpc = urlfetch.create_rpc()
+#     url = '/'.join([ghb_url, 'repos', orgname, reponame])
+#     print 'url: %s' % url
+#     urlfetch.set_default_fetch_deadline(URLFETCH_DEADLINE)
+#     urlfetch.make_fetch_call(rpc, url, headers=headers)
+#     repos[repo] = rpc
+#     result = rpc.get_result()
+#     content = json.loads(result.content)
+#     try:
+#         name = content['name']
+#     except KeyError, e:
+#         print 'KeyError: %s' % e 
+#         print 'content: %s' % content
+#         failed_repos.append((orgname,reponame))
 
     return failed_repos
-
 
 class RepoChecker(webapp2.RequestHandler):
     def get(self):
@@ -130,11 +170,11 @@ class RepoChecker(webapp2.RequestHandler):
                 body="""
 Hey there,
 
-This is an automatic message sent by the Resource name checker tool to inform
+This is an automatic message sent by the Resource name checker to inform
 you that the script found {0} name inconsistencies in some repositories between
-CartoDB's resource_staging table and the name of organization and/or repository
+the Carto resource_staging table and the name of organization and/or repository
 on GitHub. These are the specific repositories that failed (names as in
-CartoDB):
+Carto):
 
 {1}
 
@@ -148,7 +188,6 @@ Thank you!
             logging.info("The consistency check could not find any issue.")
 
         self.response.write(json.dumps(res))
-
 
 app = webapp2.WSGIApplication([
     ('/', RepoChecker),
