@@ -4,6 +4,8 @@ This repository contains the code for VertNet's repository name checker.
 
 This tool is used to check the consistency of names between the project's registry tables and GitHub's repositories.
 
+For deployment strategies, see https://github.com/VertNet/portal-web/wiki/Portal-development#deployment.
+
 # Background
 
 VertNet's registry tables store certain information about the resources of the publishers that build the network. Among others, the names of the GitHub organization and repository are stored for each resource (for feedback and monthly stats delivery purposes). However, since adding these is not an automated process and there is no update trigger in place, there can be mismatches between the registered name and the actual name of the organization and/or the repository. The task of this program is to detect such inconsistencies.
